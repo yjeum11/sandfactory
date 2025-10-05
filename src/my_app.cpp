@@ -5,11 +5,11 @@
 #include <iostream>
 #include <cstdio>
 
-#include "Window.hpp"
-#include "raylib.h"
-#include "raymath.h"
+#include "raylib-cpp.hpp"
+#include "mouse.hpp"
 #include "particle.hpp"
 #include "rectobstacle.hpp"
+#include "lineobstacle.hpp"
 #include "util.hpp"
 
 //------------------------------------------------------------------------------------
@@ -35,7 +35,7 @@ int main(void)
     const float dt = 0.05;
     const float g = 80.0f;
 
-    const int SUBSTEPS = 2;
+    const int SUBSTEPS = 8;
 
     std::unordered_set<std::unique_ptr<Particle>> particles;
 
@@ -50,12 +50,22 @@ int main(void)
 
     std::vector<RectObstacle> obstacles;
 
-    RectObstacle rotated = RectObstacle(300, 300, 50, 30, BLACK, 0);
+    RectObstacle rotated = RectObstacle(300, 300, 50, 30, BLACK, 0.8);
 
     obstacles.push_back(rotated);
 
-    raylib::Vector2 v{100, 200};
-    raylib::Vector2 w{466, 400};
+    raylib::Vector2 t{426, 300};
+    raylib::Vector2 u{326, 300};
+    raylib::Vector2 v{326, 358};
+    raylib::Vector2 w{426, 358};
+
+    std::vector<LineObstacle> lines = {
+        LineObstacle(v, w),
+        LineObstacle(u, v),
+        LineObstacle(t, w),
+    };
+
+    MouseMagnet magnet = MouseMagnet(30, 500, 2);
 
     // Main game loop
     while (!exit_requested)
@@ -64,8 +74,8 @@ int main(void)
             exit_requested = true;
         }
 
-        if (IsKeyDown(KEY_P)) {
-            paused = true;
+        if (IsKeyPressed(KEY_P)) {
+            paused = !paused;
         }
 
         if (!paused || IsKeyPressed(KEY_PERIOD)) {
@@ -74,8 +84,9 @@ int main(void)
             if (counter == 0) {
                 auto n = std::make_unique<Particle>(Particle ({288.0, 154.0}, RED));
                 n->give_velocity(raylib::Vector2(0, 0) * 4.0f, dt_sub);
+                n->give_acceleration(raylib::Vector2(0.0, g));
                 particles.insert(std::move(n));
-                counter = 100;
+                counter = 20;
             } else {
                 counter--;
             }
@@ -84,19 +95,12 @@ int main(void)
             //----------------------------------------------------------------------------------
 
             obstacles[0].rotate(obstacles[0].get_angle() + 1);
-            obstacles[0].move({obstacles[0].get_rect().x + 1, obstacles[0].get_rect().y});
 
             for (int i{0}; i < SUBSTEPS; i++) {
-                std::vector<decltype(particles)::iterator> to_erase;
-                for (auto it{particles.begin()}; it != particles.end(); ++it) {
-                    auto& p = *it;
-                    p->update(dt_sub, g);
-                    if (p->m_position.x > screenWidth || p->m_position.y > screenHeight) {
-                        to_erase.push_back(it);
-                    }
-                }
-                for (auto& e : to_erase) {
-                    particles.erase(e);
+                // Mouse interaction
+                for (auto& p : particles) {
+                    p->give_acceleration(raylib::Vector2(0.0, g));
+                    magnet.update(*p, dt_sub);
                 }
 
                 // ball-to-ball collision
@@ -104,48 +108,40 @@ int main(void)
                     auto& p = *p_it;
                     for (auto q_it = std::next(p_it); q_it != particles.end(); q_it++) {
                         auto& q = *q_it;
-                        if (Particle::collide(*p, *q)) {
-                            const raylib::Vector2 diff = p->m_position - q->m_position;
-                            const float dist {diff.Length()};
-
-                            const float delta {p->m_radius+q->m_radius - dist};
-
-                            p->m_position += diff.Normalize() * (0.5*delta);
-                            q->m_position -= diff.Normalize() * (0.5*delta);
-
-                        }
+                        p->collide_with_particle(*q);
                     }
                 }
 
                 // ball-to-line collision
                 for (auto& p : particles) {
-                    std::optional<raylib::Vector2> correction = p->collide_with_line(v, w);
-                    if (correction.has_value()) {
-                        raylib::Vector2 old_velocity = (p->m_position - p->m_old_position) * (1/dt_sub);
-
-                        // break down old_velocity to parallel and perpendicular
-
-                        raylib::Vector2 parallel = project_vector_to_line(old_velocity, v, w);
-                        raylib::Vector2 perpendicular = old_velocity - parallel;
-
-                        raylib::Vector2 new_perp = perpendicular * -0.8;
-                        raylib::Vector2 new_velocity = parallel + new_perp;
-
-                        p->m_position += correction.value();
-                        p->give_velocity(new_velocity, dt_sub);
+                    for (auto& l : lines) {
+                        p->collide_with_line(l, dt_sub);
+                    }
+                    for (auto& r : obstacles) {
+                        p->collide_with_rect(r, dt_sub);
                     }
                 }
 
-                // const float constrain_radius = 200;
-                // for (auto& p : particles) {
-                //     Vector2 center = {screenWidth / 2.0, screenHeight / 2.0};
-                //     Vector2 to_obj = Vector2Subtract(p->m_position, center);
-                //     if (Vector2Length(to_obj) > constrain_radius - p->m_radius) {
-                //         p->m_position = Vector2Add(center, Vector2Scale(Vector2Normalize(to_obj), constrain_radius - p->m_radius));
-                //     }
-                // }
+                const float constrain_radius = 200;
+                for (auto& p : particles) {
+                    raylib::Vector2 center = {screenWidth / 2.0, screenHeight / 2.0};
+                    raylib::Vector2 to_obj = p->m_position - center;
+                    if (to_obj.Length() > constrain_radius - p->m_radius) {
+                        p->m_position = center + (to_obj * (constrain_radius - p->m_radius) / to_obj.Length());
+                    }
+                }
 
-
+                std::vector<decltype(particles)::iterator> to_erase;
+                for (auto it{particles.begin()}; it != particles.end(); ++it) {
+                    auto& p = *it;
+                    p->update(dt_sub);
+                    if (p->m_position.x > screenWidth || p->m_position.y > screenHeight) {
+                        to_erase.push_back(it);
+                    }
+                }
+                for (auto& e : to_erase) {
+                    particles.erase(e);
+                }
             }
         }
 
@@ -167,10 +163,11 @@ int main(void)
             DrawText(mouseText, 190, 200, 20, LIGHTGRAY);
             DrawFPS(190, 150);
 
-            DrawLineV(v, w, BLACK);
+            for (auto& l : lines) {
+                DrawLineV(l.m_v, l.m_w, BLACK);
+            }
 
             for (auto& p : particles) {
-                DrawCircleV(p->m_old_position, p->m_radius, GRAY);
                 p->draw();
             }
 
@@ -178,14 +175,11 @@ int main(void)
                 r.draw();
             }
 
+            magnet.draw();
+
         EndDrawing();
         //----------------------------------------------------------------------------------
     }
-
-    // De-Initialization
-    //--------------------------------------------------------------------------------------
-    // CloseWindow();        // Close window and OpenGL context
-    //--------------------------------------------------------------------------------------
 
     return 0;
 }
