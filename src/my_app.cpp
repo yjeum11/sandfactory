@@ -5,25 +5,29 @@
 #include <iostream>
 #include <cstdio>
 
-#include "raylib-cpp.hpp"
+#include "Camera2D.hpp"
 #include "mouse.hpp"
+#include "raylib-cpp.hpp"
 #include "particle.hpp"
 #include "rectobstacle.hpp"
 #include "lineobstacle.hpp"
 #include "util.hpp"
+#include "flask.hpp"
 
 //------------------------------------------------------------------------------------
 // Program main entry point
 //------------------------------------------------------------------------------------
 int main(void)
 {
+    using raylib::Vector2;
     // Initialization
     //--------------------------------------------------------------------------------------
     const int screenWidth = 800;
     const int screenHeight = 600;
 
     raylib::Window window(screenWidth, screenHeight, "raylib [core] example - basic window");
-    // InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
+
+    raylib::Camera2D camera = raylib::Camera2D( Vector2(screenWidth / 2.0, screenHeight / 2.0) , Vector2(screenWidth / 2.0, screenHeight / 2.0));
 
     SetExitKey(KEY_NULL);
     SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
@@ -52,20 +56,25 @@ int main(void)
 
     RectObstacle rotated = RectObstacle(300, 300, 50, 30, BLACK, 0.8);
 
-    obstacles.push_back(rotated);
+    // obstacles.push_back(rotated);
 
-    raylib::Vector2 t{426, 300};
-    raylib::Vector2 u{326, 300};
-    raylib::Vector2 v{326, 358};
-    raylib::Vector2 w{426, 358};
+    Vector2 t{426, 300};
+    Vector2 u{326, 300};
+    Vector2 v{326, 358};
+    Vector2 w{426, 358};
 
     std::vector<LineObstacle> lines = {
-        LineObstacle(v, w),
-        LineObstacle(u, v),
-        LineObstacle(t, w),
+        // LineObstacle(v, w),
+        // LineObstacle(u, v),
+        // LineObstacle(t, w),
     };
 
     MouseMagnet magnet = MouseMagnet(30, 500, 2);
+
+    Vector2 flask_location {255, 323};
+    float flask_angle = 5.0f;
+
+    Flask test_flask = Flask(100, 70, 5);
 
     // Main game loop
     while (!exit_requested)
@@ -82,24 +91,28 @@ int main(void)
             float dt_sub = dt / SUBSTEPS;
 
             if (counter == 0) {
-                auto n = std::make_unique<Particle>(Particle ({288.0, 154.0}, RED));
-                n->give_velocity(raylib::Vector2(0, 0) * 4.0f, dt_sub);
-                n->give_acceleration(raylib::Vector2(0.0, g));
+                auto n = std::make_unique<Particle>(Particle ({288.0, 154.0}, RED, 0.9));
+                uint32_t r = uint_dist(rng);
+                float angle = 10 * sinf((float)r) + 90.0;
+                n->give_velocity(Vector2(cosf(angle), sinf(angle)) * 4.0f, dt_sub);
+                n->give_acceleration(Vector2(0.0, g));
                 particles.insert(std::move(n));
-                counter = 20;
+                counter = 10;
             } else {
                 counter--;
             }
 
+
             // Update
             //----------------------------------------------------------------------------------
 
-            obstacles[0].rotate(obstacles[0].get_angle() + 1);
-
             for (int i{0}; i < SUBSTEPS; i++) {
+                test_flask.move(flask_location);
+                test_flask.rotate(flask_angle, Vector2 {35, 50});
+
                 // Mouse interaction
                 for (auto& p : particles) {
-                    p->give_acceleration(raylib::Vector2(0.0, g));
+                    p->give_acceleration(Vector2(0.0, g));
                     magnet.update(*p, dt_sub);
                 }
 
@@ -120,17 +133,36 @@ int main(void)
                     for (auto& r : obstacles) {
                         p->collide_with_rect(r, dt_sub);
                     }
+                    test_flask.collide_with_particle(*p, dt_sub);
                 }
 
+                if (raylib::Keyboard::IsKeyDown(KEY_D)) {
+                    flask_location += {2.0/SUBSTEPS, 0};
+                } else if (raylib::Keyboard::IsKeyDown(KEY_A)) {
+                    flask_location -= {2.0/SUBSTEPS, 0};
+                } else if (raylib::Keyboard::IsKeyDown(KEY_W)) {
+                    flask_location -= {0, 2.0/SUBSTEPS};
+                } else if (raylib::Keyboard::IsKeyDown(KEY_S)) {
+                    flask_location += {0, 2.0/SUBSTEPS};
+                }
+
+                if (raylib::Keyboard::IsKeyDown(KEY_R)) {
+                    flask_angle += 1.0/SUBSTEPS;
+                } else if (raylib::Keyboard::IsKeyDown(KEY_T)) {
+                    flask_angle -= 1.0/SUBSTEPS;
+                }
+
+                // constrain to circle
                 const float constrain_radius = 200;
                 for (auto& p : particles) {
-                    raylib::Vector2 center = {screenWidth / 2.0, screenHeight / 2.0};
-                    raylib::Vector2 to_obj = p->m_position - center;
+                    Vector2 center = {screenWidth / 2.0, screenHeight / 2.0};
+                    Vector2 to_obj = p->m_position - center;
                     if (to_obj.Length() > constrain_radius - p->m_radius) {
                         p->m_position = center + (to_obj * (constrain_radius - p->m_radius) / to_obj.Length());
                     }
                 }
 
+                // Run Verlet integration and erase other particles
                 std::vector<decltype(particles)::iterator> to_erase;
                 for (auto it{particles.begin()}; it != particles.end(); ++it) {
                     auto& p = *it;
@@ -153,29 +185,40 @@ int main(void)
 
             ClearBackground(GRAY);
 
-            raylib::Vector2 center = {screenWidth / 2.0, screenHeight / 2.0};
-            center.DrawCircle(200, RAYWHITE);
+            camera.BeginMode();
 
-            raylib::Vector2 mousePos = GetMousePosition();
+                Vector2 center = {screenWidth / 2.0, screenHeight / 2.0};
+                center.DrawCircle(200, RAYWHITE);
+
+
+                for (auto& l : lines) {
+                    DrawLineV(l.m_v, l.m_w, BLACK);
+                }
+
+                for (auto& p : particles) {
+                    p->draw();
+                }
+
+                for (auto& r : obstacles) {
+                    r.draw();
+                }
+
+                test_flask.draw();
+
+                magnet.draw();
+
+            camera.EndMode();
+            Vector2 mousePos = GetMousePosition();
             char mouseText[512];
             snprintf(mouseText, 512, "X: %d, Y: %d", (int)mousePos.x, (int)mousePos.y);
 
             DrawText(mouseText, 190, 200, 20, LIGHTGRAY);
+
+            char particleText[512];
+            snprintf(particleText, 512, "Particles: %d", (int)particles.size());
+            DrawText(particleText, 190, 100, 20, LIGHTGRAY);
             DrawFPS(190, 150);
 
-            for (auto& l : lines) {
-                DrawLineV(l.m_v, l.m_w, BLACK);
-            }
-
-            for (auto& p : particles) {
-                p->draw();
-            }
-
-            for (auto& r : obstacles) {
-                r.draw();
-            }
-
-            magnet.draw();
 
         EndDrawing();
         //----------------------------------------------------------------------------------

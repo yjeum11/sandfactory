@@ -14,9 +14,9 @@ private:
     float m_angle;
     Rectangle m_rect;
 
-    std::array<Vector2, 4> m_points;
+    std::array<raylib::Vector2, 4> m_points;
     std::array<LineObstacle, 4> m_edges;
-    std::array<Vector2, 4> m_normals;
+    std::array<raylib::Vector2, 4> m_normals;
 
     float m_bounciness;
 
@@ -77,7 +77,7 @@ public:
     }
 
     void draw() const {
-        DrawTriangleFan(m_points.data(), m_points.size(), BLACK);
+        DrawTriangleFan(m_points.data(), m_points.size(), m_color);
     }
 
     void rotate(float angle) {
@@ -88,10 +88,10 @@ public:
         float cosheight = m_rect.height * std::cosf(angle * DEG2RAD);
         float sinheight = m_rect.height * std::sinf(angle * DEG2RAD);
 
-        a = {m_rect.x, m_rect.y};
-        b = {m_rect.x - sinheight, m_rect.y + cosheight};
-        c = {m_rect.x + coswidth - sinheight, m_rect.y + sinwidth + cosheight};
-        d = {m_rect.x + coswidth, m_rect.y + sinwidth};
+        a = Vector2 {m_rect.x, m_rect.y};
+        b = Vector2 {m_rect.x - sinheight, m_rect.y + cosheight};
+        c = Vector2 {m_rect.x + coswidth - sinheight, m_rect.y + sinwidth + cosheight};
+        d = Vector2 {m_rect.x + coswidth, m_rect.y + sinwidth};
 
         std::transform(m_points.begin(), m_points.end(), m_normals.begin(), 
             [](Vector2 v){
@@ -107,6 +107,13 @@ public:
         };
     }
 
+    void rotate_about(float angle, raylib::Vector2 about) {
+        rotate(angle);
+        raylib::Vector2 topleft = m_points[0];
+        raylib::Vector2 newpos = (topleft - (topleft + about)).Rotate(angle * DEG2RAD) + topleft + about;
+        move(newpos);
+    }
+
     float get_angle() const {
         return m_angle;
     }
@@ -119,8 +126,16 @@ public:
         return m_edges;
     }
 
-    std::array<Vector2, 4> get_points() const {
+    std::array<raylib::Vector2, 4> get_points() const {
         return m_points;
+    }
+
+    std::array<raylib::Vector2, 4> get_normals() const {
+        return m_normals;
+    }
+
+    void interact() {
+
     }
 
     void move(Vector2 newpos) {

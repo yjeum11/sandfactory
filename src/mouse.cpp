@@ -8,7 +8,7 @@ MouseMagnet::MouseMagnet(float r, float k, float b) {
 }
 
 void MouseMagnet::update(Particle& p, float dt) const {
-    if (raylib::Mouse::IsButtonDown(MOUSE_BUTTON_LEFT)) {
+    if (raylib::Mouse::IsButtonDown(MOUSE_BUTTON_RIGHT)) {
         raylib::Vector2 mouse_pos = raylib::Mouse::GetPosition();
         float mouse_dist = (mouse_pos - p.m_position).Length();
         if (mouse_dist < m_radius) {
@@ -21,7 +21,7 @@ void MouseMagnet::update(Particle& p, float dt) const {
 }
 
 void MouseMagnet::draw() const {
-    if (raylib::Mouse::IsButtonDown(MOUSE_BUTTON_LEFT)) {
+    if (raylib::Mouse::IsButtonDown(MOUSE_BUTTON_RIGHT)) {
         raylib::Vector2 mouse_pos = GetMousePosition();
         DrawCircleLines(mouse_pos.x, mouse_pos.y, m_radius, BLACK);
     }

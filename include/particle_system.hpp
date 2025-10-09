@@ -1,6 +1,7 @@
-#ifndef PARTICLE_HPP
-#define PARTICLE_HPP
+#ifndef PARTICLE_SYSTEM_HPP
+#define PARTICLE_SYSTEM_HPP
 
+#include "particle.hpp"
 #include "raylib-cpp.hpp"
 #include "rectobstacle.hpp"
 #include "lineobstacle.hpp"
@@ -8,17 +9,10 @@
 #include <cstdint>
 #include <optional>
 
-struct Particle {
-    raylib::Vector2 m_position;
-    raylib::Vector2 m_old_position;
-    raylib::Vector2 m_acceleration;
-    raylib::Color m_color;
-    bool m_alive;
-    uint32_t m_radius;
-    float m_bounciness;
+struct ParticleSystem {
 
-    Particle(raylib::Vector2 position, Color color);
-    Particle(raylib::Vector2 position, Color color, float bounciness);
+    std::vector<Particle> m_particles;
+
 
     bool operator==(const Particle& other) const;
 

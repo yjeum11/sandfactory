@@ -16,6 +16,16 @@ Particle::Particle(raylib::Vector2 position, Color color = RED) :
     m_bounciness(0.7)
 {}
 
+Particle::Particle(raylib::Vector2 position, Color color, float bounciness) :
+    m_position(position),
+    m_old_position(position),
+    m_acceleration(raylib::Vector2(0.0)),
+    m_color(color),
+    m_alive(true),
+    m_radius(2),
+    m_bounciness(bounciness)
+{}
+
 void Particle::draw() const {
     DrawCircleV(m_position, m_radius, m_color);
 }
@@ -53,15 +63,36 @@ void Particle::collide_with_particle(Particle& other) {
 }
 
 void Particle::collide_with_rect(const RectObstacle& rect, const float dt) {
+    using raylib::Vector2;
+    // collide with edges
     for (auto& l : rect.get_edges()) {
         collide_with_line(l, dt);
     }
+    // prevent from being inside the rectangle
+    // auto [a, b, c, d] = rect.get_points();
+    // if (point_in_triangle(m_position, a, b, c) || point_in_triangle(m_position, c, d, a)) {
+    //     for (int i = 0; i < 4; i++) {
+    //         LineObstacle line = rect.get_edges()[i];
+    //         Vector2 v = line.m_v;
+    //         Vector2 w = line.m_w;
+    //         Vector2 projection = project_point_to_line(m_position, v, w);
+    //         // check projection is in the line segment. Colinearity is guaranteed
+    //         if (!(fmin(v.x, w.x) <= projection.x &&
+    //               projection.x   <= fmax(v.x, w.x) &&
+    //               fmin(v.y, w.y) <= projection.y &&
+    //               projection.y   <= fmax(v.y, w.y))) continue;
+    //         Vector2 foot_to_center = m_position - projection;
+    //         bool is_inside = foot_to_center.DotProduct(rect.get_normals()[i]) < 0;
+    //         float foot_to_center_dist = foot_to_center.Length();
+    //
+    //     }
+    // }
 }
 
 void Particle::collide_with_line(const LineObstacle& line, const float dt) {
     raylib::Vector2 v = line.m_v;
     raylib::Vector2 w = line.m_w;
-    raylib::Vector2 projection = v + project_point_to_line(m_position, v, w);
+    raylib::Vector2 projection = project_point_to_line(m_position, v, w);
 
     // check projection is in the line segment. Colinearity is guaranteed
     if (!(fmin(v.x, w.x) <= projection.x &&
